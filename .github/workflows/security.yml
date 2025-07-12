@@ -1,0 +1,198 @@
+name: Security and Dependency Updates
+
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Weekly on Monday at 4 AM UTC
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backend/requirements.txt'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Python security audit
+      working-directory: ./backend
+      run: |
+        pip install safety
+        safety check -r requirements.txt --json > python-security-report.json || true
+        
+    - name: Node.js security audit
+      working-directory: ./frontend
+      run: |
+        npm audit --audit-level=moderate --json > node-security-report.json || true
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports-${{ github.sha }}
+        path: |
+          backend/python-security-report.json
+          frontend/node-security-report.json
+        retention-days: 30
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'AI-Recipes-Generator'
+        path: '.'
+        format: 'ALL'
+        args: >
+          --enableRetired
+          --enableExperimental
+          --scan ./backend
+          --scan ./frontend
+          --exclude "**/node_modules/**"
+          --exclude "**/venv/**"
+          --exclude "**/.git/**"
+          
+    - name: Upload dependency check results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-check-report-${{ github.sha }}
+        path: reports/
+        retention-days: 30
+
+  docker-security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker images
+      run: |
+        docker build -t ai-recipes-backend ./backend
+        docker build -t ai-recipes-frontend ./frontend
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'ai-recipes-backend'
+        format: 'sarif'
+        output: 'trivy-backend-results.sarif'
+
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'ai-recipes-frontend'
+        format: 'sarif'
+        output: 'trivy-frontend-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: |
+          trivy-backend-results.sarif
+          trivy-frontend-results.sarif
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Python dependencies
+      working-directory: ./backend
+      run: |
+        pip install flake8 black bandit mypy
+        pip install -r requirements.txt
+
+    - name: Install Node.js dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run Python code quality checks
+      working-directory: ./backend
+      run: |
+        echo "🔍 Running Python code quality checks..."
+        
+        # Linting
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        
+        # Code formatting
+        black --check .
+        
+        # Security linting
+        bandit -r . -f json -o bandit-report.json || true
+        
+        # Type checking
+        mypy . --ignore-missing-imports || true
+
+    - name: Run Node.js code quality checks
+      working-directory: ./frontend
+      run: |
+        echo "🔍 Running Node.js code quality checks..."
+        
+        # Linting
+        npm run lint
+        
+        # Type checking (if using TypeScript)
+        # npm run type-check
+
+    - name: Upload code quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-quality-reports-${{ github.sha }}
+        path: |
+          backend/bandit-report.json
+        retention-days: 30
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [security-audit, dependency-check, docker-security-scan, code-quality]
+    if: always()
+    
+    steps:
+    - name: Create security summary
+      run: |
+        echo "## 🔒 Security and Quality Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Job Results:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Security Audit:** ${{ needs.security-audit.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependency Check:** ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Docker Security Scan:** ${{ needs.docker-security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Quality:** ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 View detailed reports in the artifacts section" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Generated on: $(date)" >> $GITHUB_STEP_SUMMARY

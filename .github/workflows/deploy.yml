@@ -1,0 +1,99 @@
+name: Environment Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set environment variables
+      run: |
+        if [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
+          echo "DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}" >> $GITHUB_ENV
+          echo "GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}" >> $GITHUB_ENV
+          echo "REACT_APP_API_URL=${{ secrets.PROD_API_URL }}" >> $GITHUB_ENV
+        else
+          echo "DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" >> $GITHUB_ENV
+          echo "GEMINI_API_KEY=${{ secrets.STAGING_GEMINI_API_KEY }}" >> $GITHUB_ENV
+          echo "REACT_APP_API_URL=${{ secrets.STAGING_API_URL }}" >> $GITHUB_ENV
+        fi
+
+    - name: Create docker-compose override
+      run: |
+        cat > docker-compose.override.yml << EOF
+        version: '3.8'
+        services:
+          frontend:
+            image: ghcr.io/${{ github.repository }}-frontend:${{ github.event.inputs.version || 'latest' }}
+            environment:
+              - REACT_APP_API_URL=${{ env.REACT_APP_API_URL }}
+            volumes: []
+            
+          backend:
+            image: ghcr.io/${{ github.repository }}-backend:${{ github.event.inputs.version || 'latest' }}
+            environment:
+              - DATABASE_URL=${{ env.DATABASE_URL }}
+              - GEMINI_API_KEY=${{ env.GEMINI_API_KEY }}
+            volumes: []
+            
+          db:
+            # In production, you might want to use a managed database service
+            # and remove this service entirely
+            environment:
+              - POSTGRES_DB=recipes_db_${{ github.event.inputs.environment }}
+              - POSTGRES_USER=recipe_user
+              - POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+        EOF
+
+    - name: Deploy with Docker Compose
+      run: |
+        echo "🚀 Deploying to ${{ github.event.inputs.environment }}..."
+        docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+        
+    - name: Wait for services to be ready
+      run: |
+        echo "⏳ Waiting for services to start..."
+        sleep 30
+        
+    - name: Run health checks
+      run: |
+        echo "🔍 Running health checks..."
+        # Check backend health
+        curl -f http://localhost:8000/health || exit 1
+        # Check frontend
+        curl -f http://localhost:3000 || exit 1
+        echo "✅ All services are healthy!"
+        
+    - name: Run database migrations
+      if: github.event.inputs.environment == 'production'
+      run: |
+        echo "🔄 Running database migrations..."
+        # Add your migration commands here
+        # docker-compose exec backend python -m alembic upgrade head
+        
+    - name: Deployment summary
+      run: |
+        echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version:** ${{ github.event.inputs.version || 'latest' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status:** ✅ Successful" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed at:** $(date)" >> $GITHUB_STEP_SUMMARY
