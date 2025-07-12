@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, Float
 from sqlalchemy.sql import func
 from app.database import Base
 
+
 class Recipe(Base):
     __tablename__ = "recipes"
 
@@ -17,6 +18,7 @@ class Recipe(Base):
     rating = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
 
 class MealPlan(Base):
     __tablename__ = "meal_plans"

@@ -18,8 +18,8 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_PASSWORD: recipe_pass
-          POSTGRES_USER: recipe_user
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
           POSTGRES_DB: recipes_db_test
         options: >-
           --health-cmd pg_isready
@@ -55,7 +55,7 @@ jobs:
     - name: Run backend tests
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://recipe_user:recipe_pass@localhost:5432/recipes_db_test
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recipes_db_test
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         python run_tests_with_pdf.py

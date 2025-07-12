@@ -22,6 +22,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
 def get_db():
     db = SessionLocal()
     try:
@@ -32,8 +33,7 @@ def get_db():
         if "database" in str(e).lower() or "connection" in str(e).lower():
             logger.error(f"Database connection failed: {e}")
             raise HTTPException(
-                status_code=503, 
-                detail="Database connection unavailable."
+                status_code=503, detail="Database connection unavailable."
             )
         else:
             # Re-raise other exceptions (like validation errors) as-is

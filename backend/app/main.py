@@ -7,7 +7,7 @@ from app.database import engine, Base
 from app.exception_handlers import (
     validation_exception_handler,
     http_exception_handler,
-    general_exception_handler
+    general_exception_handler,
 )
 import os
 import logging
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="AI Recipe Generator",
     description="Generate recipes using AI based on ingredients with comprehensive validation",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add custom exception handlers
@@ -48,14 +48,18 @@ app.add_middleware(
 # Include routers
 app.include_router(recipes.router, prefix="/api", tags=["recipes"])
 
+
 @app.get("/")
 async def root():
     return {"message": "AI Recipe Generator API"}
+
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

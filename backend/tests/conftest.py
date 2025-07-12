@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures for API testing
 """
+
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
@@ -27,6 +28,7 @@ engine = create_engine(
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 def override_get_db():
     """Override database dependency for testing"""
     try:
@@ -35,6 +37,7 @@ def override_get_db():
     finally:
         db.close()
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for the test session"""
@@ -42,20 +45,22 @@ def event_loop():
     yield loop
     loop.close()
 
+
 @pytest.fixture(scope="function")
 def db_session():
     """Create a fresh database session for each test"""
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
     # Override the dependency
     app.dependency_overrides[get_db] = override_get_db
-    
+
     yield TestingSessionLocal()
-    
+
     # Clean up
     Base.metadata.drop_all(bind=engine)
     app.dependency_overrides.clear()
+
 
 @pytest.fixture(scope="function")
 def client(db_session):
@@ -63,11 +68,13 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
 
+
 @pytest.fixture(scope="function")
 async def async_client(db_session):
     """Create an async test client for the FastAPI app"""
     async with AsyncClient(app=app, base_url="http://test") as async_test_client:
         yield async_test_client
+
 
 @pytest.fixture
 def sample_recipe_data():
@@ -77,16 +84,27 @@ def sample_recipe_data():
         "description": "A delicious test recipe with chicken and pasta",
         "instructions": "1. Cook pasta according to package directions. 2. Season chicken with salt and pepper. 3. Cook chicken in a skillet until done.",
         "ingredients": [
-            {"name": "chicken breast", "amount": "2", "unit": "pieces", "notes": "boneless"},
-            {"name": "pasta", "amount": "200", "unit": "g", "notes": "penne or fusilli"},
+            {
+                "name": "chicken breast",
+                "amount": "2",
+                "unit": "pieces",
+                "notes": "boneless",
+            },
+            {
+                "name": "pasta",
+                "amount": "200",
+                "unit": "g",
+                "notes": "penne or fusilli",
+            },
             {"name": "olive oil", "amount": "2", "unit": "tbsp", "notes": None},
-            {"name": "salt", "amount": "1", "unit": "tsp", "notes": "to taste"}
+            {"name": "salt", "amount": "1", "unit": "tsp", "notes": "to taste"},
         ],
         "prep_time": 15,
         "cook_time": 25,
         "servings": 4,
-        "difficulty": "Easy"
+        "difficulty": "Easy",
     }
+
 
 @pytest.fixture
 def sample_vegetarian_recipe_data():
@@ -97,15 +115,26 @@ def sample_vegetarian_recipe_data():
         "instructions": "1. Cook pasta. 2. Sauté vegetables. 3. Combine with herbs.",
         "ingredients": [
             {"name": "pasta", "amount": "200", "unit": "g", "notes": "any shape"},
-            {"name": "bell peppers", "amount": "2", "unit": "pieces", "notes": "mixed colors"},
+            {
+                "name": "bell peppers",
+                "amount": "2",
+                "unit": "pieces",
+                "notes": "mixed colors",
+            },
             {"name": "zucchini", "amount": "1", "unit": "medium", "notes": "sliced"},
-            {"name": "cherry tomatoes", "amount": "200", "unit": "g", "notes": "halved"}
+            {
+                "name": "cherry tomatoes",
+                "amount": "200",
+                "unit": "g",
+                "notes": "halved",
+            },
         ],
         "prep_time": 10,
         "cook_time": 20,
         "servings": 3,
-        "difficulty": "Medium"
+        "difficulty": "Medium",
     }
+
 
 @pytest.fixture
 def sample_meal_plan_data():
@@ -119,29 +148,43 @@ def sample_meal_plan_data():
             "Thursday": [],
             "Friday": [],
             "Saturday": [],
-            "Sunday": []
-        }
+            "Sunday": [],
+        },
     }
+
 
 @pytest.fixture
 def multiple_recipes_data():
     """Multiple recipes for pagination testing"""
     recipes = []
     for i in range(15):
-        recipes.append({
-            "title": f"Test Recipe {i+1}",
-            "description": f"Description for recipe {i+1}",
-            "instructions": f"1. Step 1 for recipe {i+1}. 2. Step 2 for recipe {i+1}.",
-            "ingredients": [
-                {"name": f"ingredient_{i+1}_1", "amount": str(i+1), "unit": "cup", "notes": None},
-                {"name": f"ingredient_{i+1}_2", "amount": "2", "unit": "tbsp", "notes": None}
-            ],
-            "prep_time": 10 + i,
-            "cook_time": 20 + i,
-            "servings": (i % 4) + 2,
-            "difficulty": ["Easy", "Medium", "Hard"][i % 3]
-        })
+        recipes.append(
+            {
+                "title": f"Test Recipe {i+1}",
+                "description": f"Description for recipe {i+1}",
+                "instructions": f"1. Step 1 for recipe {i+1}. 2. Step 2 for recipe {i+1}.",
+                "ingredients": [
+                    {
+                        "name": f"ingredient_{i+1}_1",
+                        "amount": str(i + 1),
+                        "unit": "cup",
+                        "notes": None,
+                    },
+                    {
+                        "name": f"ingredient_{i+1}_2",
+                        "amount": "2",
+                        "unit": "tbsp",
+                        "notes": None,
+                    },
+                ],
+                "prep_time": 10 + i,
+                "cook_time": 20 + i,
+                "servings": (i % 4) + 2,
+                "difficulty": ["Easy", "Medium", "Hard"][i % 3],
+            }
+        )
     return recipes
+
 
 @pytest.fixture
 def created_recipe(client, sample_recipe_data):
@@ -149,6 +192,7 @@ def created_recipe(client, sample_recipe_data):
     response = client.post("/api/recipes", json=sample_recipe_data)
     assert response.status_code == 200
     return response.json()
+
 
 @pytest.fixture
 def created_multiple_recipes(client, multiple_recipes_data):

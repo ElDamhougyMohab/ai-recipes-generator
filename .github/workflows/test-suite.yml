@@ -16,8 +16,8 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_PASSWORD: recipe_pass
-          POSTGRES_USER: recipe_user
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
           POSTGRES_DB: recipes_db_test
         options: >-
           --health-cmd pg_isready
@@ -51,7 +51,7 @@ jobs:
     - name: Set up database
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://recipe_user:recipe_pass@localhost:5432/recipes_db_test
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recipes_db_test
       run: |
         # Initialize database schema
         python -c "from app.database import engine, Base; Base.metadata.create_all(bind=engine)"
@@ -59,7 +59,7 @@ jobs:
     - name: Run comprehensive test suite
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://recipe_user:recipe_pass@localhost:5432/recipes_db_test
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recipes_db_test
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         echo "🧪 Running comprehensive test suite..."
@@ -185,7 +185,7 @@ jobs:
         echo "✅ Frontend is accessible"
         
         # Test database connectivity
-        docker-compose exec -T db pg_isready -U recipe_user -d recipes_db || exit 1
+        docker-compose exec -T db pg_isready -U postgres -d recipes_db || exit 1
         echo "✅ Database is ready"
 
     - name: Run integration tests
