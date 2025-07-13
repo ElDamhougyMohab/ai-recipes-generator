@@ -25,6 +25,14 @@ backend/test_reports/
 backend/htmlcov/
 backend/coverage/
 
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
 # Batch files (except essential ones)
 # Keep: start_app.bat, stop_app.bat, check_status.bat
 setup.bat
