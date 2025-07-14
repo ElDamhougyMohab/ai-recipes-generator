@@ -71,13 +71,17 @@ export const useRecipes = () => {
 
   const generateRecipes = useCallback(async (requestData) => {
     try {
+      console.log('🚀 Starting recipe generation with:', requestData);
       setLoading(true);
       setError(null);
+      
       const response = await recipeAPI.generateRecipes(requestData);
+      console.log('✅ Recipe generation successful:', response);
       
       // Return the response without automatically saving recipes
       return response;
     } catch (err) {
+      console.error('❌ Recipe generation failed:', err);
       setError(err.userMessage || err.message);
       console.error('Error generating recipes:', err);
       throw err;

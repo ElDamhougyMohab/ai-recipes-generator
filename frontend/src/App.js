@@ -6,7 +6,7 @@ import MealPlanner from './components/MealPlanner';
 import ConnectionStatus from './components/ConnectionStatus';
 import Pagination from './components/Pagination';
 import { useRecipes } from './hooks/useRecipes';
-import { LLMLoader, LoadingOverlay, SkeletonLoader } from './components/LoadingIndicators';
+import { LoadingOverlay, SkeletonLoader } from './components/LoadingIndicators';
 
 const AppContainer = styled.div`
   max-width: 1200px;
@@ -241,12 +241,39 @@ const DeleteAllButton = styled.button`
   }
 `;
 
+const BackgroundIndicator = styled.div`
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: pulse 2s infinite;
+  
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+  }
+`;
+
 function App() {
   const [activeTab, setActiveTab] = useState('generate');
   const [notifications, setNotifications] = useState([]);
   const [generatedRecipes, setGeneratedRecipes] = useState([]);
-  const [llmStage, setLlmStage] = useState(null);
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
+  
+  // Background recipe generation state
+  const [isGeneratingInBackground, setIsGeneratingInBackground] = useState(false);
+  const [backgroundGenerationId, setBackgroundGenerationId] = useState(null);
   const { 
     recipes, 
     loading, 
@@ -306,21 +333,35 @@ function App() {
   };
 
   const handleGenerateRecipes = async (requestData) => {
+    // Generate unique ID for this generation request
+    const generationId = Date.now().toString();
+    
     try {
-      // Set LLM loading stages
-      setLlmStage('connecting');
+      setIsGeneratingInBackground(true);
+      setBackgroundGenerationId(generationId);
       
-      setTimeout(() => setLlmStage('processing'), 500);
-      setTimeout(() => setLlmStage('generating'), 1000);
-      setTimeout(() => setLlmStage('formatting'), 2000);
+      // Show start notification but don't block UI
+      addNotification('🚀 Generating recipes in the background... You can continue using the app!', 'info', 4000);
       
+      console.log('🚀 Starting background recipe generation with:', requestData);
+      
+      // Make the API call in the background
       const response = await generateRecipes(requestData);
       
-      setLlmStage('complete');
-      setTimeout(() => setLlmStage(null), 1000);
+      console.log('✅ Background generation completed:', response);
       
-      // Store generated recipes in temporary state (not saved yet)
-      setGeneratedRecipes(response.recipes || []);
+      // Process the response
+      const recipeCount = response.recipes ? response.recipes.length : 0;
+      
+      if (recipeCount > 0) {
+        // Add new recipes to the generated recipes list
+        setGeneratedRecipes(prev => [...prev, ...(response.recipes || [])]);
+        
+        // Show success notification
+        addNotification(`🎉 Generated ${recipeCount} new recipes! Check the "Generated Recipes" section below.`, 'success', 6000);
+      } else {
+        addNotification('⚠️ No recipes were generated. Try different ingredients or settings.', 'warning', 5000);
+      }
       
       // Check if dietary filtering occurred
       if (response.dietary_filtering && response.dietary_filtering.has_conflicts) {
@@ -336,13 +377,13 @@ function App() {
         addNotification('✅ All ingredients are compatible with your dietary preferences!', 'success');
       }
       
-      // Show generation success message
-      const recipeCount = response.recipes ? response.recipes.length : 0;
-      addNotification(`🎉 Generated ${recipeCount} new recipes!`, 'success');
-      
     } catch (error) {
-      setLlmStage(null);
+      console.error('❌ Background generation failed:', error);
+      // Always show error messages
       addNotification(`❌ Failed to generate recipes: ${error.userMessage || error.message}`, 'error');
+    } finally {
+      setIsGeneratingInBackground(false);
+      setBackgroundGenerationId(null);
     }
   };
 
@@ -431,6 +472,13 @@ function App() {
 
   return (
     <AppContainer>
+      {/* Background generation indicator */}
+      {isGeneratingInBackground && (
+        <BackgroundIndicator>
+          ⚡ Generating recipes in background...
+        </BackgroundIndicator>
+      )}
+      
       <Header>
         <Title>🍳 AI Recipe Generator</Title>
         <Subtitle>Discover amazing recipes with artificial intelligence</Subtitle>
@@ -490,7 +538,7 @@ function App() {
         <div>
           <RecipeGenerator 
             onGenerate={handleGenerateRecipes}
-            loading={loading}
+            loading={isGeneratingInBackground}
             addNotification={addNotification}
           />
           
@@ -528,12 +576,13 @@ function App() {
             </GeneratedRecipesSection>
           )}
           
-          {generatedRecipes.length === 0 && !loading && (
+          {generatedRecipes.length === 0 && !isGeneratingInBackground && (
             <EmptyState>
               <EmptyStateIcon>🍳</EmptyStateIcon>
               <EmptyStateTitle>Ready to Generate Recipes!</EmptyStateTitle>
               <EmptyStateText>
-                Fill in the form above with your ingredients and preferences, then click "Generate Recipes" to discover amazing new dishes!
+                Fill in the form above with your ingredients and preferences, then click "Generate Recipes". 
+                Recipes will be generated in the background so you can continue using the app!
               </EmptyStateText>
             </EmptyState>
           )}
@@ -595,13 +644,7 @@ function App() {
         <MealPlanner addNotification={addNotification} />
       )}
 
-      {/* LLM Loading Overlay */}
-      {llmStage && (
-        <LLMLoader 
-          stage={llmStage} 
-          estimatedTime={llmStage === 'generating' ? '30-60 seconds' : '5-10 seconds'}
-        />
-      )}
+
 
       {/* Recipe Saving Overlay */}
       {isLoadingRecipes && (
@@ -613,6 +656,13 @@ function App() {
       )}
 
       <ConnectionStatus />
+
+      {/* Background Generation Indicator */}
+      {isGeneratingInBackground && (
+        <BackgroundIndicator>
+          <span>🚀 Generating recipes in the background...</span>
+        </BackgroundIndicator>
+      )}
     </AppContainer>
   );
 }

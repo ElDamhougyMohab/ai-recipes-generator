@@ -1,0 +1,123 @@
+{
+  "info": {
+    "name": "AI Recipes Generator API",
+    "description": "Test collection for all API endpoints",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Generate Recipes",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ingredients\": [\"chicken\", \"pasta\", \"tomatoes\", \"garlic\"],\n  \"meal_type\": \"dinner\",\n  \"dietary_preferences\": [],\n  \"cuisine_type\": \"Italian\",\n  \"difficulty\": \"Medium\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/recipes/generate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "recipes", "generate"]
+        }
+      }
+    },
+    {
+      "name": "Get All Recipes",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/recipes",
+          "host": ["{{base_url}}"],
+          "path": ["api", "recipes"]
+        }
+      }
+    },
+    {
+      "name": "Create Recipe",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Spaghetti Carbonara\",\n  \"description\": \"A classic Italian pasta dish with eggs, cheese, and pancetta\",\n  \"instructions\": \"1. Cook spaghetti according to package directions.\\n2. Mix eggs and cheese in a bowl.\\n3. Cook pancetta until crispy.\\n4. Combine all ingredients while pasta is hot.\",\n  \"ingredients\": [\n    {\"name\": \"spaghetti\", \"amount\": \"400\", \"unit\": \"g\"},\n    {\"name\": \"eggs\", \"amount\": \"4\", \"unit\": \"large\"},\n    {\"name\": \"parmesan cheese\", \"amount\": \"100\", \"unit\": \"g\"},\n    {\"name\": \"pancetta\", \"amount\": \"150\", \"unit\": \"g\"}\n  ],\n  \"prep_time\": 10,\n  \"cook_time\": 15,\n  \"servings\": 4,\n  \"difficulty\": \"Medium\",\n  \"cuisine_type\": \"Italian\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/recipes",
+          "host": ["{{base_url}}"],
+          "path": ["api", "recipes"]
+        }
+      }
+    },
+    {
+      "name": "Delete Recipe",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/recipes/{{recipe_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "recipes", "{{recipe_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Get Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/stats",
+          "host": ["{{base_url}}"],
+          "path": ["api", "stats"]
+        }
+      }
+    },
+    {
+      "name": "Get Recipe by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/recipes/{{recipe_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "recipes", "{{recipe_id}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "recipe_id",
+      "value": "1",
+      "type": "string"
+    }
+  ]
+}

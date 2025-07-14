@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recipe Generation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        .warning { background: #fff3e0; color: #ef6c00; }
+        button { padding: 10px 20px; margin: 10px 0; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #45a049; }
+        #loading { display: none; background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Recipe Generation Debug Test</h1>
+    <button onclick="testRecipeGeneration()">Generate Test Recipe</button>
+    <div id="loading">⏳ Generating recipe...</div>
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'log') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(div);
+            console.log(message);
+        }
+
+        async function testRecipeGeneration() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            
+            log('🚀 Starting recipe generation test');
+            
+            const requestData = {
+                ingredients: ['chicken', 'rice'],
+                dietary_restrictions: [],
+                cuisine_type: 'any',
+                meal_type: 'dinner'
+            };
+            
+            log('📤 Request data: ' + JSON.stringify(requestData));
+            
+            try {
+                const startTime = performance.now();
+                
+                const response = await fetch('/api/recipes/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const endTime = performance.now();
+                const duration = endTime - startTime;
+                
+                log(`⏱️ Request took ${duration.toFixed(2)}ms`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                log(`✅ Response received: ${JSON.stringify(data, null, 2)}`, 'success');
+                
+                if (data.recipes && data.recipes.length > 0) {
+                    log(`🎉 Generated ${data.recipes.length} recipes!`, 'success');
+                } else {
+                    log('⚠️ No recipes in response', 'warning');
+                }
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error('Full error:', error);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Test API base URL detection
+        log(`🔍 Current URL: ${window.location.href}`);
+        log(`🔍 API calls will go to: ${window.location.origin}/api/recipes/generate`);
+    </script>
+</body>
+</html>

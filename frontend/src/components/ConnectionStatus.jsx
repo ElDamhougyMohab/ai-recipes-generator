@@ -43,7 +43,10 @@ function ConnectionStatus() {
   useEffect(() => {
     const checkConnection = async () => {
       try {
+        console.log('Checking backend health...');
         const isHealthy = await apiUtils.checkBackendHealth();
+        console.log('Health check result:', isHealthy);
+        
         const newStatus = isHealthy ? 'connected' : 'disconnected';
         
         if (newStatus !== status) {
@@ -56,6 +59,7 @@ function ConnectionStatus() {
           }
         }
       } catch (error) {
+        console.error('Health check error:', error);
         setStatus('disconnected');
         setIsVisible(true);
       }

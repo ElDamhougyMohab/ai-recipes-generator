@@ -1,11 +1,26 @@
 import google.generativeai as genai
+import aiohttp
+import asyncio
 import os
 import json
 import re
+import logging
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+class GeminiAPIError(Exception):
+    """Custom exception for Gemini API errors"""
+    pass
+
+class GeminiTimeoutError(Exception):
+    """Custom exception for Gemini API timeouts"""
+    pass
 
 
 class GeminiService:
@@ -14,8 +29,21 @@ class GeminiService:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
 
+        self.api_key = api_key
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        
+        # Configure the synchronous client as fallback
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        # Thread pool for sync operations
+        self.executor = ThreadPoolExecutor(max_workers=5)
+        
+        # Semaphore to limit concurrent requests
+        self.semaphore = asyncio.Semaphore(3)
+        
+        # Session will be created per request
+        self.session = None
 
         # Define dietary restriction mappings
         self.dietary_restrictions = {
@@ -178,34 +206,155 @@ class GeminiService:
         dietary_preferences: Optional[List[str]] = None,
         cuisine_type: Optional[str] = None,
         meal_type: Optional[str] = None,
+        timeout: int = 30,
     ) -> List[Dict[str, Any]]:
+        """
+        Generate recipes asynchronously using Gemini API
+        
+        Args:
+            ingredients: List of available ingredients
+            dietary_preferences: Dietary restrictions to apply
+            cuisine_type: Preferred cuisine style
+            meal_type: Type of meal (breakfast, lunch, dinner, snack)
+            timeout: Request timeout in seconds
+            
+        Returns:
+            List of generated recipe dictionaries
+        """
+        # Apply semaphore to limit concurrent requests
+        async with self.semaphore:
+            try:
+                logger.info(f"🚀 Starting async recipe generation with {len(ingredients)} ingredients")
+                
+                # Filter ingredients based on dietary restrictions
+                allowed_ingredients, protein_suggestions = self._filter_ingredients_by_diet(
+                    ingredients, dietary_preferences
+                )
 
-        # Filter ingredients based on dietary restrictions
-        allowed_ingredients, protein_suggestions = self._filter_ingredients_by_diet(
-            ingredients, dietary_preferences
-        )
+                # Build the prompt
+                prompt = self._build_prompt(
+                    allowed_ingredients,
+                    dietary_preferences,
+                    cuisine_type,
+                    meal_type,
+                    protein_suggestions,
+                )
 
-        prompt = self._build_prompt(
-            allowed_ingredients,
-            dietary_preferences,
-            cuisine_type,
-            meal_type,
-            protein_suggestions,
-        )
+                # Try async HTTP call first, fall back to sync if needed
+                recipes_data = await self._call_gemini_async(prompt, timeout)
+                
+                # Validate recipes against dietary restrictions
+                validated_recipes = self._validate_recipes_against_diet(
+                    recipes_data, dietary_preferences
+                )
 
+                logger.info(f"✅ Successfully generated {len(validated_recipes)} recipes")
+                return validated_recipes
+                
+            except asyncio.TimeoutError:
+                logger.error(f"⏰ Gemini API timeout after {timeout} seconds")
+                return await self._get_fallback_recipes_async(allowed_ingredients, dietary_preferences)
+                
+            except Exception as e:
+                logger.error(f"❌ Gemini API error: {str(e)}")
+                return await self._get_fallback_recipes_async(allowed_ingredients, dietary_preferences)
+    
+    async def _call_gemini_async(self, prompt: str, timeout: int = 30) -> List[Dict[str, Any]]:
+        """
+        Make async HTTP call to Gemini API
+        """
         try:
-            response = self.model.generate_content(prompt)
-            recipes_data = self._parse_response(response.text)
-
-            # Validate recipes against dietary restrictions
-            validated_recipes = self._validate_recipes_against_diet(
-                recipes_data, dietary_preferences
-            )
-
-            return validated_recipes
+            # Prepare the request payload
+            payload = {
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 2048,
+                    "topP": 0.8,
+                    "topK": 40
+                }
+            }
+            
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key
+            }
+            
+            # Create session for this request
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+                logger.info("📡 Making async HTTP request to Gemini API")
+                
+                async with session.post(self.base_url, json=payload, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.info("📡 Received successful response from Gemini API")
+                        return await self._parse_response_async(data)
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"📡 Gemini API HTTP error: {response.status} - {error_text}")
+                        raise GeminiAPIError(f"API returned {response.status}: {error_text}")
+                        
+        except asyncio.TimeoutError:
+            logger.error("📡 Async HTTP request timeout")
+            # Fallback to sync method
+            return await self._call_gemini_sync_fallback(prompt)
+            
         except Exception as e:
-            # Fallback to sample recipes if AI fails
-            return self._get_fallback_recipes(allowed_ingredients, dietary_preferences)
+            logger.error(f"📡 Async HTTP request failed: {str(e)}")
+            # Fallback to sync method
+            return await self._call_gemini_sync_fallback(prompt)
+    
+    async def _call_gemini_sync_fallback(self, prompt: str) -> List[Dict[str, Any]]:
+        """
+        Fallback to sync Gemini API call in thread pool
+        """
+        try:
+            logger.info("📡 Falling back to sync Gemini API call")
+            
+            loop = asyncio.get_event_loop()
+            
+            # Run sync API call in thread pool
+            response = await loop.run_in_executor(
+                self.executor,
+                self.model.generate_content,
+                prompt
+            )
+            
+            logger.info("📡 Sync fallback successful")
+            return self._parse_response(response.text)
+            
+        except Exception as e:
+            logger.error(f"📡 Sync fallback failed: {str(e)}")
+            raise GeminiAPIError(f"Both async and sync calls failed: {str(e)}")
+    
+    async def _parse_response_async(self, data: Dict) -> List[Dict[str, Any]]:
+        """
+        Parse async HTTP response from Gemini API
+        """
+        try:
+            content = data['candidates'][0]['content']['parts'][0]['text']
+            
+            # Use the existing sync parsing method
+            return self._parse_response(content)
+            
+        except Exception as e:
+            logger.error(f"📡 Error parsing async response: {str(e)}")
+            raise GeminiAPIError(f"Failed to parse response: {str(e)}")
+    
+    async def _get_fallback_recipes_async(
+        self, 
+        ingredients: List[str], 
+        dietary_preferences: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get fallback recipes asynchronously
+        """
+        logger.info("🔄 Generating fallback recipes")
+        
+        # Use existing sync method but wrap in async
+        return self._get_fallback_recipes(ingredients, dietary_preferences)
 
     def _build_prompt(
         self,
@@ -490,3 +639,64 @@ Return your response as a JSON array with this exact structure:
             )
 
         return fallback_recipes
+
+    async def generate_multiple_recipes(
+        self, 
+        requests: List[Dict[str, Any]]
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Generate multiple recipe sets concurrently
+        
+        Args:
+            requests: List of recipe generation requests
+            
+        Returns:
+            List of recipe lists for each request
+        """
+        try:
+            logger.info(f"🚀 Starting batch generation for {len(requests)} requests")
+            
+            # Create tasks for concurrent execution
+            tasks = []
+            for i, request in enumerate(requests):
+                task = self.generate_recipes(
+                    ingredients=request.get('ingredients', []),
+                    dietary_preferences=request.get('dietary_preferences'),
+                    cuisine_type=request.get('cuisine_type'),
+                    meal_type=request.get('meal_type')
+                )
+                tasks.append(task)
+            
+            # Execute all tasks concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results and handle exceptions
+            successful_results = []
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"❌ Batch request {i} failed: {result}")
+                    # Generate fallback for failed request
+                    fallback = await self._get_fallback_recipes_async(
+                        requests[i].get('ingredients', []), 
+                        requests[i].get('dietary_preferences')
+                    )
+                    successful_results.append(fallback)
+                else:
+                    successful_results.append(result)
+            
+            logger.info(f"✅ Completed batch generation: {len(successful_results)} results")
+            return successful_results
+            
+        except Exception as e:
+            logger.error(f"❌ Batch generation failed: {str(e)}")
+            raise
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        # Shutdown thread pool
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)

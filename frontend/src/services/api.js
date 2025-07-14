@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Use relative URLs in production, localhost in development
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? '' // Use relative URLs in production (same domain as frontend)
+  : process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -31,10 +34,16 @@ const retryRequest = async (requestFn, retries = MAX_RETRIES) => {
 // Connection health check
 const checkBackendHealth = async () => {
   try {
+    console.log('Health check - API_BASE_URL:', API_BASE_URL);
+    const healthUrl = API_BASE_URL ? `${API_BASE_URL}/health` : '/health';
+    console.log('Health check - URL:', healthUrl);
+    
     const response = await api.get('/health', { timeout: 5000 });
+    console.log('Health check - Response:', response.status, response.data);
     return response.status === 200;
   } catch (error) {
     console.warn('Backend health check failed:', error.message);
+    console.warn('Error details:', error.response?.status, error.response?.data);
     return false;
   }
 };
@@ -111,8 +120,11 @@ api.interceptors.response.use(
 export const recipeAPI = {
   // Generate recipes using AI
   generateRecipes: async (requestData) => {
+    console.log('📡 API: Starting recipe generation request');
     return retryRequest(async () => {
+      console.log('📡 API: Sending POST to /api/recipes/generate');
       const response = await api.post('/api/recipes/generate', requestData);
+      console.log('📡 API: Received response:', response.status, response.data);
       return response.data;
     });
   },
