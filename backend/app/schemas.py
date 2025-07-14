@@ -22,7 +22,8 @@ class IngredientSchema(BaseModel):
         # Remove extra whitespace and validate format
         clean_name = re.sub(r"\s+", " ", v.strip())
         # Allow Unicode letters, numbers, spaces, and common punctuation for international ingredients
-        if not re.match(r"^[\w\s\-\'\.()&,:]+$", clean_name, re.UNICODE):
+        # Updated to include percentage sign and be more permissive
+        if not re.match(r"^[\w\s\-\'\.()&,:%;]+$", clean_name, re.UNICODE):
             raise ValueError("Ingredient name contains invalid characters")
         return clean_name
 
@@ -212,7 +213,7 @@ class RecipeGenerateRequest(BaseModel):
             if len(clean_ingredient) > 100:
                 raise ValueError("Ingredient name cannot exceed 100 characters")
 
-            if not re.match(r"^[a-zA-Z0-9\s\-\'\.()&,]+$", clean_ingredient):
+            if not re.match(r"^[a-zA-Z0-9\s\-\'\.()&,%;]+$", clean_ingredient):
                 raise ValueError(
                     f"Invalid characters in ingredient: {clean_ingredient}"
                 )

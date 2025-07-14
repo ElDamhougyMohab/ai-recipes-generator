@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
-from app.routers import recipes
+from app.routers import recipes, meal_plans
 from app.database import engine, Base
 from app.exception_handlers import (
     validation_exception_handler,
@@ -47,6 +47,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(recipes.router, prefix="/api", tags=["recipes"])
+app.include_router(meal_plans.router, prefix="/api", tags=["meal-plans"])
 
 
 @app.get("/")

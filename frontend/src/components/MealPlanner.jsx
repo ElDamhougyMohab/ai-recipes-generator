@@ -290,13 +290,35 @@ const Input = styled.input`
 
 const ButtonGroup = styled.div`
   display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
   gap: 10px;
-  justify-content: center;
-  margin-top: 20px;
 `;
 
 const SecondaryButton = styled.button`
   background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-left: 10px;
+  transition: background 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: #5a6268;
+  }
+
+  &:disabled {
+    background: #b0b0b0;
+    cursor: not-allowed;
+  }
+`;
+
+const GenerateButton = styled.button`
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -304,11 +326,44 @@ const SecondaryButton = styled.button`
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  margin-right: 15px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 
-  &:hover {
-    background: #5a6268;
-    transform: translateY(-1px);
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  &:disabled {
+    background: #b0b0b0;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const ClearButton = styled.button`
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 15px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+  }
+
+  &:disabled {
+    background: #b0b0b0;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 `;
 
@@ -335,6 +390,7 @@ function MealPlanner({ addNotification }) {
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [generatingMealPlan, setGeneratingMealPlan] = useState(false);
 
   // Load all available recipes for meal planning
   const loadAllRecipes = async () => {
@@ -362,6 +418,88 @@ function MealPlanner({ addNotification }) {
     }
   };
 
+  // Generate AI-powered meal plan
+  const generateSmartMealPlan = async () => {
+    if (allRecipes.length === 0) {
+      addNotification?.('No recipes available for meal planning. Generate some recipes first!', 'error');
+      return;
+    }
+
+    try {
+      setGeneratingMealPlan(true);
+      
+      // Create a balanced meal plan by categorizing recipes
+      const newMealPlan = {};
+      
+      // Categorize recipes based on keywords
+      const categorizeRecipe = (recipe) => {
+        const title = recipe.title.toLowerCase();
+        const description = recipe.description?.toLowerCase() || '';
+        const ingredients = recipe.ingredients?.join(' ').toLowerCase() || '';
+        const text = `${title} ${description} ${ingredients}`;
+        
+        // Breakfast keywords
+        if (text.match(/breakfast|pancake|cereal|oatmeal|toast|eggs|bacon|yogurt|granola|fruit|smoothie|coffee|muffin/)) {
+          return 'breakfast';
+        }
+        // Lunch keywords
+        if (text.match(/lunch|sandwich|salad|soup|wrap|bowl|pasta|rice|quinoa|burger|pizza|noodle/)) {
+          return 'lunch';
+        }
+        // Dinner keywords (default)
+        return 'dinner';
+      };
+
+      // Group recipes by category
+      const breakfastRecipes = allRecipes.filter(r => categorizeRecipe(r) === 'breakfast');
+      const lunchRecipes = allRecipes.filter(r => categorizeRecipe(r) === 'lunch');
+      const dinnerRecipes = allRecipes.filter(r => categorizeRecipe(r) === 'dinner');
+      
+      // If categories are empty, use all recipes as fallback
+      const safeBreakfast = breakfastRecipes.length > 0 ? breakfastRecipes : allRecipes;
+      const safeLunch = lunchRecipes.length > 0 ? lunchRecipes : allRecipes;
+      const safeDinner = dinnerRecipes.length > 0 ? dinnerRecipes : allRecipes;
+
+      // Generate meal plan for each day
+      days.forEach(day => {
+        newMealPlan[day] = {};
+        
+        // Randomly select recipes for each meal, avoiding repetition within the same day
+        const usedRecipes = new Set();
+        
+        // Select breakfast
+        let breakfastOptions = safeBreakfast.filter(r => !usedRecipes.has(r.id));
+        if (breakfastOptions.length === 0) breakfastOptions = safeBreakfast;
+        const breakfast = breakfastOptions[Math.floor(Math.random() * breakfastOptions.length)];
+        newMealPlan[day]['Breakfast'] = breakfast;
+        usedRecipes.add(breakfast.id);
+        
+        // Select lunch
+        let lunchOptions = safeLunch.filter(r => !usedRecipes.has(r.id));
+        if (lunchOptions.length === 0) lunchOptions = safeLunch;
+        const lunch = lunchOptions[Math.floor(Math.random() * lunchOptions.length)];
+        newMealPlan[day]['Lunch'] = lunch;
+        usedRecipes.add(lunch.id);
+        
+        // Select dinner
+        let dinnerOptions = safeDinner.filter(r => !usedRecipes.has(r.id));
+        if (dinnerOptions.length === 0) dinnerOptions = safeDinner;
+        const dinner = dinnerOptions[Math.floor(Math.random() * dinnerOptions.length)];
+        newMealPlan[day]['Dinner'] = dinner;
+        usedRecipes.add(dinner.id);
+      });
+
+      setMealPlan(newMealPlan);
+      addNotification?.('🎉 AI meal plan generated successfully! Review and save your plan.', 'success');
+      
+    } catch (error) {
+      console.error('Error generating meal plan:', error);
+      addNotification?.('Failed to generate meal plan. Please try again.', 'error');
+    } finally {
+      setGeneratingMealPlan(false);
+    }
+  };
+
   useEffect(() => {
     loadSavedPlans();
     loadAllRecipes(); // Load all recipes when component mounts
@@ -370,9 +508,30 @@ function MealPlanner({ addNotification }) {
   const loadSavedPlans = async () => {
     try {
       setLoadingPlans(true);
-      const response = await mealPlanAPI.getMealPlans();
-      // Handle paginated response - extract items array
-      setSavedPlans(response.items || []);
+      
+      // Load all meal plans by fetching all pages
+      const allMealPlans = [];
+      let currentPage = 1;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await mealPlanAPI.getMealPlans(currentPage, 50); // Use larger page size
+        allMealPlans.push(...(response.items || []));
+        hasMore = response.has_next;
+        currentPage++;
+        
+        // Safety check to prevent infinite loops
+        if (currentPage > 20) {
+          console.warn('Too many pages of meal plans, stopping at page 20');
+          break;
+        }
+      }
+      
+      // Sort by creation date (newest first)
+      allMealPlans.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      setSavedPlans(allMealPlans);
+      console.log(`✅ Loaded ${allMealPlans.length} meal plans:`, allMealPlans.map(p => ({ id: p.id, name: p.name, created_at: p.created_at })));
     } catch (error) {
       console.error('Error loading meal plans:', error);
       setSavedPlans([]); // Set empty array on error
@@ -499,6 +658,7 @@ function MealPlanner({ addNotification }) {
       
       // Reload saved plans to show the new one
       await loadSavedPlans();
+      console.log('🔄 Reloaded saved plans after saving meal plan');
       
       // Reset form
       setPlanName('');
@@ -548,14 +708,16 @@ function MealPlanner({ addNotification }) {
   };
 
   const clearMealPlan = () => {
-    setMealPlan(days.reduce((acc, day) => {
-      acc[day] = mealTimes.reduce((meals, meal) => {
-        meals[meal] = null;
-        return meals;
-      }, {});
-      return acc;
-    }, {}));
-    setPlanName('');
+    const emptyPlan = {};
+    days.forEach(day => {
+      emptyPlan[day] = {
+        'Breakfast': null,
+        'Lunch': null,
+        'Dinner': null
+      };
+    });
+    setMealPlan(emptyPlan);
+    addNotification?.('Meal plan cleared', 'info');
   };
 
   const deleteMealPlan = async (planId) => {
@@ -854,6 +1016,15 @@ function MealPlanner({ addNotification }) {
         />
       </InputGroup>
       
+      <ButtonGroup>
+        <GenerateButton onClick={generateSmartMealPlan} disabled={generatingMealPlan || allRecipes.length === 0}>
+          {generatingMealPlan ? <InlineLoader type="dots" /> : '🤖 Generate Smart Plan'}
+        </GenerateButton>
+        <ClearButton onClick={clearMealPlan} disabled={generatingMealPlan}>
+          🗑️ Clear Plan
+        </ClearButton>
+      </ButtonGroup>
+      
       <PlannerGrid>
         {days.map(day => (
           <DayCard key={day}>
@@ -918,9 +1089,18 @@ function MealPlanner({ addNotification }) {
       </PlannerGrid>
 
       <ButtonGroup>
-        <SecondaryButton onClick={clearMealPlan}>
+        <GenerateButton onClick={generateSmartMealPlan} disabled={generatingMealPlan}>
+          {generatingMealPlan ? (
+            <>
+              <InlineLoader type="dots" /> Generating Meal Plan...
+            </>
+          ) : (
+            '🤖 Generate Meal Plan'
+          )}
+        </GenerateButton>
+        <ClearButton onClick={clearMealPlan}>
           🗑️ Clear Plan
-        </SecondaryButton>
+        </ClearButton>
         <SecondaryButton onClick={() => exportToPDF()} disabled={generatingPDF}>
           {generatingPDF ? (
             <>
@@ -993,6 +1173,13 @@ function MealPlanner({ addNotification }) {
         <LoadingOverlay 
           text="Generating PDF..." 
           subtext="Creating your meal plan document"
+          type="dots"
+        />
+      )}
+      {generatingMealPlan && (
+        <LoadingOverlay 
+          text="Generating Smart Meal Plan..." 
+          subtext="AI is creating a balanced weekly meal plan for you"
           type="dots"
         />
       )}
