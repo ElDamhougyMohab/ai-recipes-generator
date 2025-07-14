@@ -5,6 +5,11 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? '' // Use relative URLs in production (same domain as frontend)
   : process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+console.log('🔧 API Configuration:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+console.log('  Final API_BASE_URL:', API_BASE_URL);
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 seconds timeout

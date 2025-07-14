@@ -65,6 +65,11 @@ def delete_meal_plan(db: Session, meal_plan_id: int):
     return False
 
 
+def get_meal_plans_count(db: Session):
+    """Get total count of meal plans"""
+    return db.query(models.MealPlan).count()
+
+
 def get_recipes_paginated(
     db: Session, page: int = 1, per_page: int = 10, search: Optional[str] = None
 ):
